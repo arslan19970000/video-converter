@@ -27,7 +27,7 @@ export function VideoPreview({
   const [duration, setDuration] = useState(0)
   const [volume, setVolume] = useState(1)
   const [muted, setMuted] = useState(false)
-  const [videoUrl, setVideoUrl] = useState<string>("")
+  const [videoUrl, setVideoUrl] = useState<string | null>(null)
 
   useEffect(() => {
     const url = URL.createObjectURL(file)
@@ -138,6 +138,17 @@ export function VideoPreview({
     const mins = Math.floor(seconds / 60)
     const secs = Math.floor(seconds % 60)
     return `${mins}:${secs.toString().padStart(2, "0")}`
+  }
+
+  // Don't render until videoUrl is ready
+  if (!videoUrl) {
+    return (
+      <div className={cn("space-y-3", className)}>
+        <div className="relative rounded-xl overflow-hidden bg-black aspect-video flex items-center justify-center">
+          <div className="text-white/50">Loading video...</div>
+        </div>
+      </div>
+    )
   }
 
   return (
