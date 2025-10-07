@@ -11,6 +11,9 @@ interface VideoPreviewProps {
   onDurationLoad?: (duration: number) => void
   onVideoLoad?: (width: number, height: number) => void
   trim?: { start: number; end: number }
+  rotate?: 0 | 90 | 180 | 270
+  flip?: "horizontal" | "vertical" | "both" | null
+  speed?: number
   className?: string
 }
 
@@ -19,6 +22,9 @@ export function VideoPreview({
   onDurationLoad,
   onVideoLoad,
   trim,
+  rotate = 0,
+  flip = null,
+  speed = 1,
   className,
 }: VideoPreviewProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -41,6 +47,9 @@ export function VideoPreview({
   useEffect(() => {
     const video = videoRef.current
     if (!video) return
+
+    // Set playback speed
+    video.playbackRate = speed
 
     const handleLoadedMetadata = () => {
       const dur = video.duration
@@ -72,7 +81,7 @@ export function VideoPreview({
       video.removeEventListener("timeupdate", handleTimeUpdate)
       video.removeEventListener("ended", handleEnded)
     }
-  }, [trim, onDurationLoad, onVideoLoad])
+  }, [trim, speed, onDurationLoad, onVideoLoad])
 
   const togglePlay = () => {
     const video = videoRef.current
@@ -140,6 +149,25 @@ export function VideoPreview({
     return `${mins}:${secs.toString().padStart(2, "0")}`
   }
 
+  // Calculate transform CSS based on rotate and flip
+  const getTransform = () => {
+    const transforms: string[] = []
+
+    if (rotate) {
+      transforms.push(`rotate(${rotate}deg)`)
+    }
+
+    if (flip === "horizontal") {
+      transforms.push("scaleX(-1)")
+    } else if (flip === "vertical") {
+      transforms.push("scaleY(-1)")
+    } else if (flip === "both") {
+      transforms.push("scaleX(-1) scaleY(-1)")
+    }
+
+    return transforms.length > 0 ? transforms.join(" ") : undefined
+  }
+
   // Don't render until videoUrl is ready
   if (!videoUrl) {
     return (
@@ -158,7 +186,8 @@ export function VideoPreview({
         <video
           ref={videoRef}
           src={videoUrl}
-          className="w-full aspect-video object-contain"
+          className="w-full aspect-video object-contain transition-transform duration-300"
+          style={{ transform: getTransform() }}
           onClick={togglePlay}
         />
 
@@ -175,11 +204,30 @@ export function VideoPreview({
           </div>
         )}
 
-        {/* Trim Indicators */}
-        {trim && (
-          <div className="absolute bottom-0 left-0 right-0 px-4 pb-2 bg-gradient-to-t from-black/60 to-transparent">
-            <div className="text-xs text-white/80">
-              Trim: {formatTime(trim.start)} - {formatTime(trim.end)}
+        {/* Edit Indicators */}
+        {(trim || rotate !== 0 || flip || speed !== 1) && (
+          <div className="absolute bottom-0 left-0 right-0 px-4 pb-2 bg-gradient-to-t from-black/80 to-transparent">
+            <div className="flex flex-wrap gap-2 text-xs text-white/90">
+              {trim && (
+                <span className="bg-white/20 px-2 py-1 rounded">
+                  Trim: {formatTime(trim.start)} - {formatTime(trim.end)}
+                </span>
+              )}
+              {rotate !== 0 && (
+                <span className="bg-white/20 px-2 py-1 rounded">
+                  Rotate: {rotate}°
+                </span>
+              )}
+              {flip && (
+                <span className="bg-white/20 px-2 py-1 rounded">
+                  Flip: {flip}
+                </span>
+              )}
+              {speed !== 1 && (
+                <span className="bg-white/20 px-2 py-1 rounded">
+                  Speed: {speed}x
+                </span>
+              )}
             </div>
           </div>
         )}

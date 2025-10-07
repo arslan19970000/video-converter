@@ -56,11 +56,14 @@ export function useFFmpegAdvanced() {
     const outputFileName = `output.${options.outputFormat}`
 
     try {
-      // Set up progress tracking
+      // Set up progress tracking with proper cleanup
+      const progressHandler = ({ progress }: { progress: number }) => {
+        const progressPercent = Math.min(100, Math.round(progress * 100))
+        onProgress?.(progressPercent)
+      }
+
       if (onProgress) {
-        ffmpeg.on("progress", ({ progress }) => {
-          onProgress(Math.round(progress * 100))
-        })
+        ffmpeg.on("progress", progressHandler)
       }
 
       // Write input file to FFmpeg filesystem
@@ -71,6 +74,11 @@ export function useFFmpegAdvanced() {
 
       // Execute conversion
       await ffmpeg.exec(args)
+
+      // Remove progress listener immediately after execution
+      if (onProgress) {
+        ffmpeg.off("progress", progressHandler)
+      }
 
       // Read the output file
       const data = await ffmpeg.readFile(outputFileName)
@@ -100,11 +108,14 @@ export function useFFmpegAdvanced() {
     const ffmpeg = ffmpegRef.current
 
     try {
-      // Set up progress tracking
+      // Set up progress tracking with proper cleanup
+      const progressHandler = ({ progress }: { progress: number }) => {
+        const progressPercent = Math.min(100, Math.round(progress * 100))
+        onProgress?.(progressPercent)
+      }
+
       if (onProgress) {
-        ffmpeg.on("progress", ({ progress }) => {
-          onProgress(Math.round(progress * 100))
-        })
+        ffmpeg.on("progress", progressHandler)
       }
 
       // Write all input files
@@ -133,6 +144,11 @@ export function useFFmpegAdvanced() {
         "copy",
         outputFileName,
       ])
+
+      // Remove progress listener
+      if (onProgress) {
+        ffmpeg.off("progress", progressHandler)
+      }
 
       // Read the output file
       const data = await ffmpeg.readFile(outputFileName)
@@ -167,11 +183,14 @@ export function useFFmpegAdvanced() {
     const ffmpeg = ffmpegRef.current
 
     try {
-      // Set up progress tracking
+      // Set up progress tracking with proper cleanup
+      const progressHandler = ({ progress }: { progress: number }) => {
+        const progressPercent = Math.min(100, Math.round(progress * 100))
+        onProgress?.(progressPercent)
+      }
+
       if (onProgress) {
-        ffmpeg.on("progress", ({ progress }) => {
-          onProgress(Math.round(progress * 100))
-        })
+        ffmpeg.on("progress", progressHandler)
       }
 
       // Process each segment with trimming
@@ -225,6 +244,11 @@ export function useFFmpegAdvanced() {
         outputFileName,
       ])
 
+      // Remove progress listener
+      if (onProgress) {
+        ffmpeg.off("progress", progressHandler)
+      }
+
       // Read the output file
       const data = await ffmpeg.readFile(outputFileName)
 
@@ -275,18 +299,12 @@ function buildFFmpegArgs(input: string, output: string, options: ConversionOptio
   // Video filters array
   const filters: string[] = []
 
-  // Speed adjustment
-  if (options.speed && options.speed !== 1) {
-    const videoSpeed = 1 / options.speed
-    filters.push(`setpts=${videoSpeed}*PTS`)
-  }
-
-  // Rotation
-  if (options.rotate) {
+  // Rotation (must come before flip)
+  if (options.rotate && options.rotate !== 0) {
     const rotations: Record<number, string> = {
-      90: "transpose=1",
-      180: "transpose=2,transpose=2",
-      270: "transpose=2",
+      90: "transpose=1",     // 90 degrees clockwise
+      180: "transpose=1,transpose=1",  // 180 degrees (90+90)
+      270: "transpose=2",    // 90 degrees counter-clockwise (same as 270 clockwise)
     }
     if (rotations[options.rotate]) {
       filters.push(rotations[options.rotate])
@@ -296,8 +314,17 @@ function buildFFmpegArgs(input: string, output: string, options: ConversionOptio
   // Flip
   if (options.flip) {
     if (options.flip === "horizontal") filters.push("hflip")
-    if (options.flip === "vertical") filters.push("vflip")
-    if (options.flip === "both") filters.push("hflip,vflip")
+    else if (options.flip === "vertical") filters.push("vflip")
+    else if (options.flip === "both") {
+      filters.push("hflip")
+      filters.push("vflip")
+    }
+  }
+
+  // Speed adjustment for video
+  if (options.speed && options.speed !== 1) {
+    const videoSpeed = 1 / options.speed
+    filters.push(`setpts=${videoSpeed}*PTS`)
   }
 
   // Resolution/Scale
@@ -320,7 +347,7 @@ function buildFFmpegArgs(input: string, output: string, options: ConversionOptio
     filters.push(`fps=${options.fps}`)
   }
 
-  // Apply filters if any
+  // Apply video filters if any
   if (filters.length > 0) {
     args.push("-vf", filters.join(","))
   }
@@ -374,10 +401,30 @@ function buildFFmpegArgs(input: string, output: string, options: ConversionOptio
     args.push("-ac", options.audioChannels.toString())
   }
 
+  // Audio filters array
+  const audioFilters: string[] = []
+
   // Speed adjustment for audio
   if (options.speed && options.speed !== 1) {
-    const audioSpeed = 1 / options.speed
-    args.push("-af", `atempo=${audioSpeed}`)
+    // atempo filter has limitations: must be between 0.5 and 2.0
+    // For speeds outside this range, we need to chain multiple atempo filters
+    let speed = options.speed
+    while (speed > 2.0) {
+      audioFilters.push("atempo=2.0")
+      speed = speed / 2.0
+    }
+    while (speed < 0.5) {
+      audioFilters.push("atempo=0.5")
+      speed = speed / 0.5
+    }
+    if (speed !== 1.0) {
+      audioFilters.push(`atempo=${speed.toFixed(2)}`)
+    }
+  }
+
+  // Apply audio filters if any
+  if (audioFilters.length > 0) {
+    args.push("-af", audioFilters.join(","))
   }
 
   // Output file

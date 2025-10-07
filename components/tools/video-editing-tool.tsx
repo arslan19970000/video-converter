@@ -145,7 +145,12 @@ export function VideoEditingTool() {
         {/* Video Preview */}
         {file && (
           <>
-            <VideoPreview file={file} />
+            <VideoPreview
+              file={file}
+              rotate={rotate}
+              flip={flip}
+              speed={speed}
+            />
 
             {/* Editing Controls */}
             <Card className="card-glass border-0 shadow-lg">
