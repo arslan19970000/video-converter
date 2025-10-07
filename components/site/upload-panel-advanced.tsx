@@ -16,7 +16,7 @@ import { TrimTimeline } from "@/components/video/trim-timeline"
 import { FormatPresets } from "@/components/video/format-presets"
 import { AdvancedOptions } from "@/components/video/advanced-options"
 import { EditingTools } from "@/components/video/editing-tools"
-import { MergeVideos } from "@/components/video/merge-videos"
+import { MergeVideosAdvanced, type VideoSegment } from "@/components/video/merge-videos-advanced"
 import type { ConversionOptions, FormatPreset } from "@/lib/types"
 
 const VIDEO_FORMATS = ["mp4", "mov", "avi", "mkv", "webm"] as const
@@ -27,13 +27,13 @@ export function UploadPanelAdvanced() {
   const inputRef = useRef<HTMLInputElement>(null)
   const [dragActive, setDragActive] = useState(false)
   const [file, setFile] = useState<File | null>(null)
-  const [mergeFiles, setMergeFiles] = useState<File[]>([])
+  const [videoSegments, setVideoSegments] = useState<VideoSegment[]>([])
   const [mode, setMode] = useState<"single" | "merge">("single")
   const [duration, setDuration] = useState(0)
   const [progress, setProgress] = useState(0)
   const [converting, setConverting] = useState(false)
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null)
-  const { loaded, loading, error, convertVideo, mergeVideos } = useFFmpegAdvanced()
+  const { loaded, loading, error, convertVideo, mergeVideoSegments } = useFFmpegAdvanced()
 
   // Conversion options
   const [options, setOptions] = useState<ConversionOptions>({
@@ -101,7 +101,7 @@ export function UploadPanelAdvanced() {
       return
     }
 
-    if (mode === "merge" && mergeFiles.length < 2) {
+    if (mode === "merge" && videoSegments.length < 2) {
       toast.error("Please select at least 2 videos to merge")
       return
     }
@@ -123,8 +123,8 @@ export function UploadPanelAdvanced() {
       let outputBlob: Blob
 
       if (mode === "merge") {
-        // Merge mode
-        outputBlob = await mergeVideos(mergeFiles, options.outputFormat, (progressValue) => {
+        // Merge mode with trimmed segments
+        outputBlob = await mergeVideoSegments(videoSegments, options.outputFormat, (progressValue) => {
           setProgress(progressValue)
         })
       } else {
@@ -150,7 +150,7 @@ export function UploadPanelAdvanced() {
     } finally {
       setConverting(false)
     }
-  }, [file, mergeFiles, mode, options, trim, loaded, convertVideo, mergeVideos, downloadUrl])
+  }, [file, videoSegments, mode, options, trim, loaded, convertVideo, mergeVideoSegments, downloadUrl])
 
   return (
     <div className="space-y-6">
@@ -173,8 +173,8 @@ export function UploadPanelAdvanced() {
       </Card>
 
       {mode === "merge" ? (
-        // Merge Mode
-        <MergeVideos files={mergeFiles} onFilesChange={setMergeFiles} />
+        // Merge Mode with Advanced Trimming
+        <MergeVideosAdvanced segments={videoSegments} onSegmentsChange={setVideoSegments} />
       ) : (
         // Single File Mode
         <Card className="max-w-4xl mx-auto card-glass shadow-brand-xl relative overflow-hidden">
@@ -413,7 +413,7 @@ export function UploadPanelAdvanced() {
       )}
 
       {/* Merge Mode Conversion */}
-      {mode === "merge" && mergeFiles.length >= 2 && (
+      {mode === "merge" && videoSegments.length >= 2 && (
         <Card className="card-glass shadow-brand-xl border-0">
           <CardContent className="p-6">
             <div className="space-y-4">

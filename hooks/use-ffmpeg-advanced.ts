@@ -152,6 +152,97 @@ export function useFFmpegAdvanced() {
     }
   }
 
+  const mergeVideoSegments = async (
+    segments: Array<{
+      file: File
+      trim: { start: number; end: number }
+    }>,
+    outputFormat: string,
+    onProgress?: (progress: number) => void
+  ): Promise<Blob> => {
+    if (!ffmpegRef.current || !loaded) {
+      throw new Error("FFmpeg is not loaded yet")
+    }
+
+    const ffmpeg = ffmpegRef.current
+
+    try {
+      // Set up progress tracking
+      if (onProgress) {
+        ffmpeg.on("progress", ({ progress }) => {
+          onProgress(Math.round(progress * 100))
+        })
+      }
+
+      // Process each segment with trimming
+      const processedFiles: string[] = []
+
+      for (let i = 0; i < segments.length; i++) {
+        const segment = segments[i]
+        const inputFileName = `input${i}.${segment.file.name.split(".").pop()}`
+        const trimmedFileName = `trimmed${i}.${outputFormat}`
+
+        // Write input file
+        await ffmpeg.writeFile(inputFileName, await fetchFile(segment.file))
+
+        // Trim the segment
+        const trimArgs = [
+          "-i",
+          inputFileName,
+          "-ss",
+          segment.trim.start.toString(),
+          "-to",
+          segment.trim.end.toString(),
+          "-c",
+          "copy",
+          trimmedFileName,
+        ]
+
+        await ffmpeg.exec(trimArgs)
+
+        processedFiles.push(trimmedFileName)
+
+        // Clean up input file
+        await ffmpeg.deleteFile(inputFileName)
+      }
+
+      // Create concat file list with processed files
+      const concatList = processedFiles.map((f) => `file '${f}'`).join("\n")
+      await ffmpeg.writeFile("concat_list.txt", concatList)
+
+      const outputFileName = `output.${outputFormat}`
+
+      // Merge all trimmed segments
+      await ffmpeg.exec([
+        "-f",
+        "concat",
+        "-safe",
+        "0",
+        "-i",
+        "concat_list.txt",
+        "-c",
+        "copy",
+        outputFileName,
+      ])
+
+      // Read the output file
+      const data = await ffmpeg.readFile(outputFileName)
+
+      // Clean up all files
+      for (const file of processedFiles) {
+        await ffmpeg.deleteFile(file)
+      }
+      await ffmpeg.deleteFile("concat_list.txt")
+      await ffmpeg.deleteFile(outputFileName)
+
+      const mimeType = getMimeType(outputFormat)
+      return new Blob([data], { type: mimeType })
+    } catch (err) {
+      console.error("Merge segments error:", err)
+      throw new Error("Video merge failed. Please try again.")
+    }
+  }
+
   const getVideoInfo = async (file: File): Promise<VideoFile> => {
     // This would require parsing FFmpeg probe output
     // For now, return basic info
@@ -167,6 +258,7 @@ export function useFFmpegAdvanced() {
     error,
     convertVideo,
     mergeVideos,
+    mergeVideoSegments,
     getVideoInfo,
   }
 }
