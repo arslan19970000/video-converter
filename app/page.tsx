@@ -1,5 +1,5 @@
 import { Hero } from "@/components/site/hero"
-import { UploadPanel } from "@/components/site/upload-panel"
+import { UploadPanelAdvanced } from "@/components/site/upload-panel-advanced"
 import { Features } from "@/components/site/features"
 import { Testimonials } from "@/components/site/testimonials"
 
@@ -14,10 +14,10 @@ export default function HomePage() {
             <span className="text-brand-gradient">Ready to Convert?</span>
           </h2>
           <p className="text-muted-foreground max-w-2xl mx-auto">
-            Upload your file and start converting in seconds. It's that simple.
+            Upload your file and start converting with advanced options including trimming, presets, editing tools, and more.
           </p>
         </div>
-        <UploadPanel />
+        <UploadPanelAdvanced />
       </section>
 
       <section id="tools" className="container mx-auto px-4">
